@@ -7,7 +7,9 @@ angular.module('docs').controller('Navigation', function($scope, $state, $stateP
   User.userInfo().then(function(data) {
     $rootScope.userInfo = data;
     if (data.anonymous) {
-      if($state.current.name !== 'login') {
+      // 'passwordreset' is a public route that does not require authentication
+      var publicStates = ['login', 'passwordreset'];
+      if (publicStates.indexOf($state.current.name) === -1) {
         $state.go('login', {
           redirectState: $state.current.name,
           redirectParams: JSON.stringify($stateParams),

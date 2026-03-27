@@ -6,6 +6,18 @@
 angular.module('docs').controller('Login', function(Restangular, $scope, $rootScope, $state, $stateParams, $dialog, User, $translate, $uibModal) {
   $scope.codeRequired = false;
 
+  // If redirected here from a passwordreset link, go directly without requiring login
+  if ($stateParams.redirectState === 'passwordreset' && $stateParams.redirectParams) {
+    try {
+      var resetParams = JSON.parse($stateParams.redirectParams);
+      var resetKey = resetParams.key;
+      if (resetKey) {
+        $state.go('passwordreset', { key: resetKey });
+        return;
+      }
+    } catch(e) { /* invalid JSON, fall through to normal login */ }
+  }
+
   // Get the app configuration
   Restangular.one('app').get().then(function(data) {
     $rootScope.app = data;
@@ -28,10 +40,22 @@ angular.module('docs').controller('Login', function(Restangular, $scope, $rootSc
       });
 
       if($stateParams.redirectState !== undefined && $stateParams.redirectParams !== undefined) {
-        $state.go($stateParams.redirectState, JSON.parse($stateParams.redirectParams))
-          .catch(function() {
-            $state.go('document.default');
+        try {
+          var params = JSON.parse($stateParams.redirectParams);
+          // Clean invalid keys the router serializes (e.g. "#": null)
+          var cleanParams = {};
+          angular.forEach(params, function(value, key) {
+            if (key !== '#' && value !== null && value !== undefined) {
+              cleanParams[key] = value;
+            }
           });
+          $state.go($stateParams.redirectState, cleanParams)
+            .catch(function() {
+              $state.go('document.default');
+            });
+        } catch(e) {
+          $state.go('document.default');
+        }
       } else {
         $state.go('document.default');
       }

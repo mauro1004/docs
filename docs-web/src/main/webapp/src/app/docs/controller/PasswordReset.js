@@ -9,7 +9,12 @@ angular.module('docs').controller('PasswordReset', function($scope, Restangular,
       key: $stateParams.key,
       password: $scope.password
     }).then(function () {
-      $state.go('login');
+      var title = $translate.instant('passwordreset.success_title');
+      var msg = $translate.instant('passwordreset.success_message');
+      var btns = [{result: 'ok', label: $translate.instant('ok'), cssClass: 'btn-primary'}];
+      $dialog.messageBox(title, msg, btns).then(function() {
+        $state.go('login');
+      });
     }, function () {
       var title = $translate.instant('passwordreset.error_title');
       var msg = $translate.instant('passwordreset.error_message');
