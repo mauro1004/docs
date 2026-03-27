@@ -1,0 +1,90 @@
+name: Build and Push to Docker Hub
+
+on:
+  push:
+    branches:
+      - master
+  # También permite lanzarlo manualmente desde GitHub
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descargar el código del repo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Configurar JDK 11 para compilar con Maven
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      # 3. Configurar Node.js para compilar el frontend con Grunt
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: docs-web/src/main/webapp/package.json
+
+      # 4. Instalar Grunt CLI globalmente
+      - name: Install Grunt CLI
+        run: npm install -g grunt-cli
+
+      # 5. Instalar dependencias del frontend
+      - name: Install frontend dependencies
+        working-directory: docs-web/src/main/webapp
+        run: npm install
+
+      # 6. Compilar todo el proyecto en modo producción
+      - name: Build with Maven (production)
+        run: mvn -Pprod -DskipTests clean install --no-transfer-progress
+
+      # 7. Verificar que el .war fue generado
+      - name: Verify WAR file
+        run: ls -lh docs-web/target/docs-web-*.war
+
+      # 8. Configurar QEMU para builds multi-arquitectura (amd64 + arm64 para QNAP)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 9. Configurar Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 10. Login en Docker Hub con los secrets
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 11. Generar tags automáticos
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/teedy
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      # 12. Build y push de la imagen a Docker Hub
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # amd64 para PC/servidor, arm64 para QNAP ARM
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache para acelerar builds futuros
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
